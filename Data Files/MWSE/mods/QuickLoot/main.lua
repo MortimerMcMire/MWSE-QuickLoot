@@ -1,15 +1,16 @@
 --[[
 	Mod Initialization: Morrowind Quick Loot
-	Author: mort, NullCascade
-
+	Version 1.3
+	Author: mort, sveng
+	       
 	This file enables Fallout 4-style quick looting, the default key is Z, default take all is X.
 ]] --
 
 local interop = require("QuickLoot.interop")
 
 -- Ensure that the player has the necessary MWSE version.
-if (mwse.buildDate == nil or mwse.buildDate < 20190207) then
-	mwse.log("[QuickLoot] Build date of %s does not meet minimum build date of 2019-02-07.", mwse.buildDate)
+if (mwse.buildDate == nil or mwse.buildDate < 20190409) then
+	mwse.log("[QuickLoot] Build date of %s does not meet minimum build date of 2019-04-09.", mwse.buildDate)
 	event.register(
 		"initialized",
 		function()
@@ -32,7 +33,9 @@ local defaultConfig = {
 	menuX = 6,
 	menuY = 4,
 	takeKey = "z",
-	takeAllKey = "x"
+	takeAllKey = "x",
+	svengKey = "x"
+
 }
 
 -- Load our config file, and fill in default values for missing elements.
@@ -47,6 +50,10 @@ else
 	end
 end
 
+local svengToggleState = true
+local svengDenyLabelState = false
+local svengDotBlockState = false
+
 -- State for the currently targetted reference and item.
 local currentTarget = nil
 local currentIndex = nil
@@ -60,6 +67,7 @@ local quickLootGUI = nil
 -- Toggle if you're waiting for a key rebind
 local rebindTake = false
 local rebindTakeAll = false
+local rebindsveng = false
 
 -- Keep track of all the GUI IDs we care about.
 local GUIID_MenuContents = nil
@@ -73,6 +81,7 @@ local GUIID_QuickLoot_Menu = nil
 local GUIID_ModConfig_Menu = nil
 local GUIID_ModConfig_TakeKey = nil
 local GUIID_ModConfig_TakeAllKey = nil
+local GUIID_ModConfig_svengKey = nil
 
 -- Changes the selection to a new index. Enforces bounds to [1, currentInventorySize].
 local function setSelectionIndex(index)
@@ -118,8 +127,10 @@ local function setSelectionIndex(index)
 	end
 	
 	if ( firstIndex > 1 ) then
+		svengDotBlockState = true	
 		dotBlock.visible = true
 	else
+		svengDotBlockState = false	
 		dotBlock.visible = false
 	end
 
@@ -166,12 +177,72 @@ local function canLootObject()
 	return true
 end
 
+local function svengToggleItemsList()
+   if quickLootGUI == nil then
+      return
+   elseif config.svengKey == "x" then
+      return
+   end
+   
+   local contentBlock = quickLootGUI:findChild(GUIID_QuickLoot_ContentBlock)
+
+   if contentBlock ~= nil then
+      contentBlock.visible = svengToggleState
+      local children = contentBlock.children
+      for i = 1, #children do
+	 children[i].visible = svengToggleState
+	 local subChildren = children[i].children
+	 for j = 1, #subChildren do
+	       subChildren[j].visible = svengToggleState
+	 end
+      end
+   end
+   
+   local denyLabel = quickLootGUI:findChild(GUIID_QuickLoot_DenyLabel)
+   if denyLabel ~= nil then
+      denyLabel.visible = svengToggleState and svengDenyLabelState
+      denyLabel.parent.visible = svengToggleState
+   end
+   
+   local dotBlock = quickLootGUI:findChild(GUIID_QuickLoot_DotBlock)
+   if dotBlock ~= nil then
+      dotBlock.visible = svengToggleState and svengDotBlockState
+      local children = dotBlock.children
+      for i = 1, #children do
+         children[i].visible = svengToggleState
+      end
+   end
+   
+   setSelectionIndex(1)
+   quickLootGUI:updateLayout()
+end
+
+local function svengOnKeyDown(e)
+      if config.svengKey == "x" then
+         return
+      end
+      
+      if e.keyCode ~= tes3.scanCode[config.svengKey] then
+		return
+	elseif tes3.menuMode() == true then
+	   return
+	end
+	
+	if svengToggleState == false then
+	   svengToggleState = true
+	else
+	   svengToggleState = false
+	end
+	svengToggleItemsList()
+	
+end
+
 -- Refresh the GUI with the currently available items.
 local function refreshItemsList()
 	-- Kill all our children.
 	local contentBlock = quickLootGUI:findChild(GUIID_QuickLoot_ContentBlock)
 	contentBlock:destroyChildren()
-	
+
 	local nameLabel = quickLootGUI:findChild(GUIID_QuickLoot_NameLabel)
 	nameLabel.text = currentTarget.object.name
 
@@ -180,12 +251,15 @@ local function refreshItemsList()
 	-- Check to see if we can loot the inventory.
 	local canLoot, cantLootReason = canLootObject()
 	if (not canLoot) then
-		denyLabel.visible = true
+	        denyLabel.visible = true
 		denyLabel.text = cantLootReason
 		--contentBlock:createLabel({text = cantLootReason})
+		svengDenyLabelState = true
+		svengToggleItemsList()
 		quickLootGUI:updateLayout()
 		return
-	else
+	else	
+		svengDenyLabelState = false	
 		denyLabel.visible = false
 	end
 	
@@ -211,6 +285,7 @@ local function refreshItemsList()
 			quickLootGUI.visible = false
 		end
 	end
+	
 
 	for _, stack in pairs(container.inventory) do
 		--
@@ -246,6 +321,8 @@ local function refreshItemsList()
 	end
 
 	setSelectionIndex(1)
+
+	svengToggleItemsList()
 	
 	quickLootGUI:updateLayout()
 end
@@ -270,7 +347,7 @@ local function createQuickLootGUI()
 	nameBlock.autoWidth = true
 	nameBlock.paddingAllSides = 1
 	nameBlock.childAlignX = 0.5
-	local nameLabel = nameBlock:createLabel({id = GUIID_QuickLoot_NameLabel, text = nil})
+	local nameLabel = nameBlock:createLabel({id = GUIID_QuickLoot_NameLabel, text = ''})
 	nameLabel.color = tes3ui.getPalette("header_color")
 	nameBlock:updateLayout()
     nameBlock.widthProportional = 1.0
@@ -281,7 +358,7 @@ local function createQuickLootGUI()
 	denyBlock.autoWidth = true
 	denyBlock.paddingAllSides = 1
 	denyBlock.childAlignX = 0.5
-	denyBlock:createLabel({id = GUIID_QuickLoot_DenyLabel, text = nil})
+	denyBlock:createLabel({id = GUIID_QuickLoot_DenyLabel, text = ''})
 	denyBlock:updateLayout()
 	denyBlock.widthProportional = 1.0
 	
@@ -302,6 +379,10 @@ local function createQuickLootGUI()
 
 	-- This is needed or things get weird.
 	quickLootGUI:updateLayout()
+
+-- sveng edit begin	
+   	svengToggleState = false
+-- sveng edit end
 
 	refreshItemsList()
 end
@@ -370,7 +451,6 @@ local function onActivationTargetChanged(e)
 		interop.skipNextTarget = false
 		return
 	end
-	
 	
 	-- Don't loot containers if your hands are disabled
 	if (tes3.mobilePlayer.attackDisabled) then
@@ -515,22 +595,30 @@ local function takeAllItems(e)
 end
 
 local function onUIObjectTooltip(e)
-	if config.modDisabled == true then
+	if config.modDisabled == true
+	or interop.skipNextTarget == true then
 		--ensure your tooltips are back in place
 		e.tooltip.absolutePosAlignX = nil
 		e.tooltip.absolutePosAlignY = nil
 		return
 	end
-	
-	if (e.object.objectType ~= tes3.objectType.container) then
+
+	if (config.hideTooltip == true) then
+	   if e.reference ~= nil and e.reference.mobile ~= nil
+	   and e.reference.mobile.health.current ~= nil
+	   and e.reference.mobile.health.current <= 0 then
+		e.tooltip.absolutePosAlignX = 4
+		e.tooltip.absolutePosAlignY = 4
+	   elseif e.object.objectType == tes3.objectType.container then
+		e.tooltip.absolutePosAlignX = 4
+		e.tooltip.absolutePosAlignY = 4
+	   else
 		e.tooltip.absolutePosAlignX = nil
 		e.tooltip.absolutePosAlignY = nil
+       end
 	else
-		if (config.hideTooltip == true) then
-		--send the tooltip into the stratosphere
-			e.tooltip.absolutePosAlignX = 4
-			e.tooltip.absolutePosAlignY = 4
-		end
+		e.tooltip.absolutePosAlignX = nil
+		e.tooltip.absolutePosAlignY = nil
 	end
 end
 
@@ -549,6 +637,13 @@ local function rebindKey(e)
 		local modMenu = tes3ui.findMenu(GUIID_ModConfig_Menu)
 		local button = modMenu:findChild(GUIID_ModConfig_TakeAllKey)
 		button.text = config.takeAllKey
+   	elseif ( rebindsveng == true ) then
+		local keyName = table.find(tes3.scanCode,e.keyCode)
+		config.svengKey = keyName
+		rebindsveng = false
+		local modMenu = tes3ui.findMenu(GUIID_ModConfig_Menu)
+		local button = modMenu:findChild(GUIID_ModConfig_svengKey)
+		button.text = config.svengKey
 	end
 end
 
@@ -556,7 +651,8 @@ local function onInitialized()
 	-- Make sure that we have valid keys.
 	local lootKey = tes3.scanCode[config.takeKey]
 	local lootAllKey = tes3.scanCode[config.takeAllKey]
-	if (lootKey == nil and lootAllKey == nil) then
+	local svengKey = tes3.scanCode[config.svengKey]
+	if (lootKey == nil and lootAllKey == nil) or svengKey == nil then
 		mwse.log("[Morrowind Quick Loot] Invalid configuration. Invalid")
 		return
 	end
@@ -573,6 +669,7 @@ local function onInitialized()
 	GUIID_ModConfig_Menu = tes3ui.registerID("MWSE:ModConfigMenu")
 	GUIID_ModConfig_TakeKey = tes3ui.registerID("MWSE:ModConfigMenu:mainBlock:hBlockTakeItemKey:buttonTakeItemKey")
 	GUIID_ModConfig_TakeAllKey = tes3ui.registerID("MWSE:ModConfigMenu:mainBlock:hBlockTakeAllItemsKey:buttonTakeAllItemsKey")
+	GUIID_ModConfig_svengKey = tes3ui.registerID("MWSE:ModConfigMenu:mainBlock:hBlocksvengItemsKey:buttonsvengKey")
 
 	-- Register the necessary events to get going.
 	event.register("activationTargetChanged", onActivationTargetChanged)
@@ -582,6 +679,7 @@ local function onInitialized()
 	event.register("keyDown", rebindKey)
 	event.register("mouseWheel", onMouseWheelChanged)
 	event.register("menuEnter", clearQuickLootMenu)
+	event.register("keyDown", svengOnKeyDown)
 	
 	mwse.log("[Morrowind Quick Loot] Initialized. Loot Key: %s; Loot All Key: %s", config.takeKey, config.takeAllKey)
 end
@@ -642,6 +740,11 @@ local function rebindTakeAllKey(e)
 	button.text = "Press any key"
 end
 
+local function rebindsvengKey(e)
+	rebindsveng = true
+	local button = e.source
+	button.text = "Press any key, \"x\" to disable this feature"
+end
 
 function modConfig.onCreate(container)
 	local mainBlock = container:createThinBorder({})
@@ -761,6 +864,20 @@ function modConfig.onCreate(container)
 		buttonTakeAllItemsKey.layoutOriginFractionX = 1.0
 		buttonTakeAllItemsKey.paddingTop = 3
 		buttonTakeAllItemsKey:register("mouseClick", rebindTakeAllKey)
+	end
+	do
+		local hBlocksvengKey = mainBlock:createBlock({})
+		hBlocksvengKey.flowDirection = "left_to_right"
+		hBlocksvengKey.layoutWidthFraction = 1.0
+		hBlocksvengKey.autoHeight = true
+	
+		local labelsvengKey = hBlocksvengKey:createLabel({ text = "Current Toggle Quickloot on/off key, \"x\" to disable this feature: " })
+		labelsvengKey.layoutOriginFractionX = 0.0
+
+		local buttonsvengKey = hBlocksvengKey:createButton({ id = GUIID_ModConfig_svengKey, text = config.svengKey })
+		buttonsvengKey.layoutOriginFractionX = 1.0
+		buttonsvengKey.paddingTop = 3
+		buttonsvengKey:register("mouseClick", rebindsvengKey)
 	end
 	do
 		local hBlockNumberDisplayed = mainBlock:createBlock({})
