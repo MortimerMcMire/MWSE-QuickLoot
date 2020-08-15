@@ -1,7 +1,7 @@
 --[[
 	Mod Initialization: Morrowind Quick Loot
-	Version 1.3
-	Author: mort, sveng
+	Version 1.8
+	Author: mort
 	       
 	This file enables Fallout 4-style quick looting, the default key is Z, default take all is X.
 ]] --
@@ -29,6 +29,7 @@ local defaultConfig = {
 	showScripted = false,
 	showMessageBox = false,
 	showPlants = true,
+	activateMode = true,
 	maxItemDisplaySize = 10,
 	menuX = 6,
 	menuY = 4,
@@ -57,6 +58,12 @@ local svengDotBlockState = false
 -- State for the currently targetted reference and item.
 local currentTarget = nil
 local currentIndex = nil
+
+-- True if you're activating from the alternate activate key
+local alternateActivate = false
+
+-- True if you just used your default activate key to take an item
+local spacebarActivate = 0
 
 -- Keep track of the current inventory size.
 local currentInventorySize = nil
@@ -172,8 +179,17 @@ local function canLootObject()
 	currentInventorySize = #container.inventory
 	if (currentInventorySize == 0) then
 		return false, "Empty"
-
 	end
+	
+	if (currentInventorySize == 1) then
+		for _, stack in pairs(container.inventory) do
+			local item = stack.object
+			if item.name == "" then
+				return false, "Empty"
+			end
+		end
+	end
+	
 	return true
 end
 
@@ -250,9 +266,17 @@ local function refreshItemsList()
 
 	-- Check to see if we can loot the inventory.
 	local canLoot, cantLootReason = canLootObject()
+	
+	local invaliditemcount = 0
+	
 	if (not canLoot) then
-	        denyLabel.visible = true
+	    denyLabel.visible = true
 		denyLabel.text = cantLootReason
+		if (cantLootReason == "Empty" and config.showPlants == false) then
+			if (currentTarget.object.organic == true) then
+				quickLootGUI.visible = false
+			end
+		end
 		--contentBlock:createLabel({text = cantLootReason})
 		svengDenyLabelState = true
 		svengToggleItemsList()
@@ -262,7 +286,6 @@ local function refreshItemsList()
 		svengDenyLabelState = false	
 		denyLabel.visible = false
 	end
-	
 	quickLootGUI.visible = true
 
 	-- Clone the object if necessary.
@@ -270,12 +293,18 @@ local function refreshItemsList()
 	
 	-- Start going over the items in the object's inventory and making elements for them.
 	currentIndex = nil
+
 	local container = currentTarget.object
 	
 	--backup print for loaded inventories
 	if (#container.inventory == 0) then
 		contentBlock:createLabel({text = "Empty"})
 		quickLootGUI:updateLayout()
+		if config.showPlants == false then
+			if (container.organic == true) then
+				quickLootGUI.visible = false
+			end
+		end
 		return
 	end
 	
@@ -285,43 +314,53 @@ local function refreshItemsList()
 			quickLootGUI.visible = false
 		end
 	end
-	
 
 	for _, stack in pairs(container.inventory) do
 		--
-		
 		local item = stack.object
+		if item.name ~= "" then
+			-- Our container block for this item.
+			local block = contentBlock:createBlock({})
+			block.flowDirection = "left_to_right"
+			block.autoWidth = true
+			block.autoHeight = true
+			block.paddingAllSides = 3
+
+			-- Store the item/count on the block for later logic.
+			block:setPropertyObject("QuickLoot:Item", item)
+			block:setPropertyInt("QuickLoot:Count", math.abs(stack.count))
+			block:setPropertyInt("QuickLoot:Value", item.value)
 			
-		-- Our container block for this item.
-		local block = contentBlock:createBlock({})
-		block.flowDirection = "left_to_right"
-		block.autoWidth = true
-		block.autoHeight = true
-		block.paddingAllSides = 3
 
-		-- Store the item/count on the block for later logic.
-		block:setPropertyObject("QuickLoot:Item", item)
-		block:setPropertyInt("QuickLoot:Count", math.abs(stack.count))
-		block:setPropertyInt("QuickLoot:Value", item.value)
-		
+			-- Item icon.
+			local icon = block:createImage({id = GUIID_QuickLoot_ContentBlock_ItemIcon, path = "icons\\" .. item.icon})
+			icon.borderRight = 5
 
-		-- Item icon.
-		local icon = block:createImage({id = GUIID_QuickLoot_ContentBlock_ItemIcon, path = "icons\\" .. item.icon})
-		icon.borderRight = 5
-
-		-- Label text
-		local labelText = item.name
-		if (math.abs(stack.count) > 1) then
-			labelText = labelText .. " (" .. math.abs(stack.count) .. ")"
+			-- Label text
+			local labelText = item.name
+			if (math.abs(stack.count) > 1) then
+				labelText = labelText .. " (" .. math.abs(stack.count) .. ")"
+			end
+			
+			local label = block:createLabel({id = GUIID_QuickLoot_ContentBlock_ItemLabel, text = labelText})
+			label.absolutePosAlignY = 0.5
+		else then
+			--invaliditemcount = 1
 		end
-		
-		local label = block:createLabel({id = GUIID_QuickLoot_ContentBlock_ItemLabel, text = labelText})
-		label.absolutePosAlignY = 0.5
+	end
 	
+	if (invaliditemcount > 0) then
+		denyLabel.visible = true
+		denyLabel.text = "Empty"
 	end
 
-	setSelectionIndex(1)
-
+	if ( currentIndex == nil ) then
+		setSelectionIndex(1)
+	else
+		setSelectionIndex(currentIndex)
+	end
+	--tes3.messageBox(currentIndex)
+	
 	svengToggleItemsList()
 	
 	quickLootGUI:updateLayout()
@@ -334,12 +373,11 @@ local function createQuickLootGUI()
 		refreshItemsList()
 		return
 	end
-
+	
 	--
 	quickLootGUI = tes3ui.createMenu({id = GUIID_QuickLoot_Menu, fixedFrame = true})
 	quickLootGUI.absolutePosAlignX = 0.1 * config.menuX
 	quickLootGUI.absolutePosAlignY = 0.1 * config.menuY
-	
 	--
 	
 	local nameBlock = quickLootGUI:createBlock({})
@@ -347,6 +385,7 @@ local function createQuickLootGUI()
 	nameBlock.autoWidth = true
 	nameBlock.paddingAllSides = 1
 	nameBlock.childAlignX = 0.5
+	
 	local nameLabel = nameBlock:createLabel({id = GUIID_QuickLoot_NameLabel, text = ''})
 	nameLabel.color = tes3ui.getPalette("header_color")
 	nameBlock:updateLayout()
@@ -367,23 +406,20 @@ local function createQuickLootGUI()
 	dotBlock.widthProportional = 1.0
 	dotBlock.autoHeight = true
 	dotBlock.paddingAllSides = 3
+	
 	local dotLabel = dotBlock:createLabel({text = "..."})
 	dotLabel.absolutePosAlignX = 0.5
 	dotBlock.visible = false
-
+	
 	--
 	local contentBlock = quickLootGUI:createBlock({id = GUIID_QuickLoot_ContentBlock})
 	contentBlock.flowDirection = "top_to_bottom"
 	contentBlock.autoHeight = true
 	contentBlock.autoWidth = true
-
+	
 	-- This is needed or things get weird.
 	quickLootGUI:updateLayout()
-
--- sveng edit begin	
    	svengToggleState = false
--- sveng edit end
-
 	refreshItemsList()
 end
 
@@ -410,21 +446,27 @@ local function onActivationTargetChanged(e)
 		return
 	end
 	
+	if ( spacebarActivate > 0 ) then
+		spacebarActivate = spacebarActivate - 1
+		return
+	end
+	
 	local contentsMenu = tes3ui.findMenu(GUIID_MenuContents)
 	
 	-- Declone the inventory if they aren't opening the inventory
 	if ( currentTarget ~= nil and contentsMenu == nil ) then
 		currentTarget.object:onInventoryClose(currentTarget)
 	end
-	
-	local newTarget = e.current
 
+	local newTarget = e.current
+	
 	local targetNil = (newTarget == nil)
 	clearQuickLootMenu(targetNil)
+
 	if (targetNil) then
 		return
 	end
-
+	
 	-- We only care about containers (or npcs or creatures)
 	if (newTarget.object.objectType ~= tes3.objectType.container) then
 		if (newTarget.object.objectType ~= tes3.objectType.npc) then
@@ -446,7 +488,7 @@ local function onActivationTargetChanged(e)
 	end
 	
 	--Don't activate quickloot if told otherwise
-	if interop.skipNextTarget == true then
+	if ( interop.skipNextTarget == true ) then
 		clearQuickLootMenu(true)
 		interop.skipNextTarget = false
 		return
@@ -456,9 +498,20 @@ local function onActivationTargetChanged(e)
 	if (tes3.mobilePlayer.attackDisabled) then
 		return
 	end
-	
+		
 	currentTarget = newTarget
 	createQuickLootGUI(newTarget)
+	spacebarActivate = 0 --failsafe
+end
+
+local function arrowKeyScroll(e)
+	if (currentTarget) then
+		if (e.keyCode == 208) then
+			setSelectionIndex(currentIndex + 1)
+		elseif (e.keyCode == 200 ) then
+			setSelectionIndex(currentIndex - 1)
+		end
+	end
 end
 
 -- Called when the mouse wheel scroll is used. Changes the selection.
@@ -490,25 +543,12 @@ local function crimeCheck(itemValue)
 	end
 end
 
---triggers traps if you try quicklooting a trapped container
-local function triggerTrap()
-	local playerRef = tes3.getPlayerRef()
-	if currentTarget.lockNode ~= nil then
-		if currentTarget.lockNode.trap ~= nil then
-			playerRef:activate(currentTarget)
-			return
-		end
-	end
-end
-
--- Takes all of the currently selected item.
-local function takeItem(e)
-	
-	if ( e.keyCode ~= tes3.scanCode[config.takeKey] ) then
+local function takeItem()
+	if (tes3.menuMode()) then
 		return
 	end
 	
-	if (not canLootObject()) then
+	if (canLootObject() == false)  then
 		return
 	end
 	
@@ -520,8 +560,21 @@ local function takeItem(e)
 		return
 	end
 	
-	triggerTrap()
+	if tes3.mobilePlayer.invisibility == 1 then
+		tes3.removeEffects{reference=tes3.player, effect=tes3.effect.invisibility}
+	end
 	
+	if currentTarget.lockNode ~= nil then
+		if currentTarget.lockNode.trap ~= nil then
+			tes3.cast({reference = tes3.getPlayerTarget(),
+						target=tes3.player,
+						spell=tes3.getPlayerTarget().lockNode.trap
+						})
+			tes3.getPlayerTarget().lockNode.trap = nil
+			return
+		end	
+	end
+
 	local crimeValue = 0
 	local block = quickLootGUI:findChild(GUIID_QuickLoot_ContentBlock).children[currentIndex]
 	
@@ -545,6 +598,49 @@ local function takeItem(e)
 	setSelectionIndex(math.clamp(preservedIndex, 1, currentInventorySize))
 end
 
+-- Takes all of the currently selected item.
+local function takeItemKey(e)
+	if (tes3.menuMode()) then
+		return
+	end
+	
+	if ( e.keyCode ~= tes3.scanCode[config.takeKey] ) then
+		return
+	end
+	
+	if config.activateMode == true then
+		if tes3.getPlayerTarget() then
+			alternateActivate = true
+			tes3.player:activate(tes3.getPlayerTarget())
+		else
+			tes3ui.leaveMenuMode()
+		end
+	else
+		takeItem()
+	end
+end
+
+
+local function takeItemActivate(e)
+	if (not canLootObject()) then
+		return
+	end
+	
+	if (config.activateMode == true and alternateActivate == false) then
+		spacebarActivate = 2
+		takeItem()
+		return false
+	else
+		--tes3.messageBox("hit")
+		alternateActivate = false
+		return
+	end
+end
+
+local function setDeleteDelay(ref)
+	mwscript.setDelete{reference=ref}
+end
+
 -- Takes all items from the current target.
 local function takeAllItems(e)
 
@@ -552,11 +648,21 @@ local function takeAllItems(e)
 		return
 	end
 	
-	if (not canLootObject()) then
+	if config.modDisabled == true then
 		return
 	end
 	
-	if config.modDisabled == true then
+	local canloot,reason = canLootObject()
+	
+	if (currentTarget.object.objectType == tes3.objectType.npc) or (currentTarget.object.objectType == tes3.objectType.creature) then
+		if (reason == "Empty") then
+			mwscript.disable{reference=currentTarget}
+			timer.delayOneFrame({callback = setDeleteDelay(currentTarget)})
+			return
+		end
+	end
+	
+	if (not canLootObject()) then
 		return
 	end
 	
@@ -564,7 +670,20 @@ local function takeAllItems(e)
 		return
 	end
 	
-	triggerTrap()
+	if tes3.mobilePlayer.invisibility == 1 then
+		tes3.removeEffects{reference=tes3.player, effect=tes3.effect.invisibility}
+	end
+	
+	if currentTarget.lockNode ~= nil then
+		if currentTarget.lockNode.trap ~= nil then
+			tes3.cast({reference = tes3.getPlayerTarget(),
+						target=tes3.player,
+						spell=tes3.getPlayerTarget().lockNode.trap
+						})
+			tes3.getPlayerTarget().lockNode.trap = nil
+			return
+		end	
+	end
 	
 	local inventory = currentTarget.object.inventory
 	local crimeValue = 0
@@ -595,30 +714,21 @@ local function takeAllItems(e)
 end
 
 local function onUIObjectTooltip(e)
-	if config.modDisabled == true
-	or interop.skipNextTarget == true then
-		--ensure your tooltips are back in place
-		e.tooltip.absolutePosAlignX = nil
-		e.tooltip.absolutePosAlignY = nil
+	if interop.skipNextTarget == true then
+		interop.skipNextTarget = false
 		return
 	end
-
-	if (config.hideTooltip == true) then
+	
+	if (config.modDisabled == false and config.hideTooltip == true) then
 	   if e.reference ~= nil and e.reference.mobile ~= nil
 	   and e.reference.mobile.health.current ~= nil
 	   and e.reference.mobile.health.current <= 0 then
-		e.tooltip.absolutePosAlignX = 4
-		e.tooltip.absolutePosAlignY = 4
+		e.tooltip.maxWidth = 0
+		e.tooltip.maxHeight = 0
 	   elseif e.object.objectType == tes3.objectType.container then
-		e.tooltip.absolutePosAlignX = 4
-		e.tooltip.absolutePosAlignY = 4
-	   else
-		e.tooltip.absolutePosAlignX = nil
-		e.tooltip.absolutePosAlignY = nil
+		e.tooltip.maxWidth = 0
+		e.tooltip.maxHeight = 0
        end
-	else
-		e.tooltip.absolutePosAlignX = nil
-		e.tooltip.absolutePosAlignY = nil
 	end
 end
 
@@ -675,17 +785,17 @@ local function onInitialized()
 	event.register("activationTargetChanged", onActivationTargetChanged)
 	event.register("uiObjectTooltip", onUIObjectTooltip)
 	event.register("keyDown", takeAllItems)
-	event.register("keyDown", takeItem)
+	event.register("keyDown", takeItemKey)
 	event.register("keyDown", rebindKey)
+	event.register("keyDown", arrowKeyScroll)
 	event.register("mouseWheel", onMouseWheelChanged)
 	event.register("menuEnter", clearQuickLootMenu)
 	event.register("keyDown", svengOnKeyDown)
+	event.register("activate", takeItemActivate)
 	
 	mwse.log("[Morrowind Quick Loot] Initialized. Loot Key: %s; Loot All Key: %s", config.takeKey, config.takeAllKey)
 end
 event.register("initialized", onInitialized)
-
-
 
 ---
 --- Mod Config
@@ -726,6 +836,12 @@ local function toggleHideTooltip(e)
 	config.hideTooltip = not config.hideTooltip
 	local button = e.source
 	button.text = config.hideTooltip and tes3.findGMST(tes3.gmst.sYes).value or tes3.findGMST(tes3.gmst.sNo).value
+end
+
+local function toggleActivateMode(e)
+	config.activateMode = not config.activateMode
+	local button = e.source
+	button.text = config.activateMode and tes3.findGMST(tes3.gmst.sYes).value or tes3.findGMST(tes3.gmst.sNo).value
 end
 
 local function rebindTakeKey(e)
@@ -815,7 +931,7 @@ function modConfig.onCreate(container)
 		hBlockOnActivate.layoutWidthFraction = 1.0
 		hBlockOnActivate.autoHeight = true
 	
-		local labelOnActivate = hBlockOnActivate:createLabel({ text = "Show containers with scripted onActivate? (Can break some container scripts) " })
+		local labelOnActivate = hBlockOnActivate:createLabel({ text = "Show containers with scripted onActivate? (Can rarely break some container scripts) " })
 		labelOnActivate.layoutOriginFractionX = 0.0
 
 		local buttonOnActivate = hBlockOnActivate:createButton({ text = (config.showScripted and tes3.findGMST(tes3.gmst.sYes).value or tes3.findGMST(tes3.gmst.sNo).value) })
@@ -829,7 +945,7 @@ function modConfig.onCreate(container)
 		hBlockTooltip.layoutWidthFraction = 1.0
 		hBlockTooltip.autoHeight = true
 	
-		local labelTooltip = hBlockTooltip:createLabel({ text = "Hide container tooltips " })
+		local labelTooltip = hBlockTooltip:createLabel({ text = "Hide vanilla container tooltips " })
 		labelTooltip.layoutOriginFractionX = 0.0
 
 		local buttonTooltip = hBlockTooltip:createButton({ text = (config.hideTooltip and tes3.findGMST(tes3.gmst.sYes).value or tes3.findGMST(tes3.gmst.sNo).value) })
@@ -838,12 +954,26 @@ function modConfig.onCreate(container)
 		buttonTooltip:register("mouseClick", toggleHideTooltip)
 	end
 	do
+		local hBlockTooltip = mainBlock:createBlock({})
+		hBlockTooltip.flowDirection = "left_to_right"
+		hBlockTooltip.layoutWidthFraction = 1.0
+		hBlockTooltip.autoHeight = true
+	
+		local labelTooltip = hBlockTooltip:createLabel({ text = "Use activate key as take single item? (Take Item Key now opens regular container menu: " })
+		labelTooltip.layoutOriginFractionX = 0.0
+
+		local buttonTooltip = hBlockTooltip:createButton({ text = (config.activateMode and tes3.findGMST(tes3.gmst.sYes).value or tes3.findGMST(tes3.gmst.sNo).value) })
+		buttonTooltip.layoutOriginFractionX = 1.0
+		buttonTooltip.paddingTop = 3
+		buttonTooltip:register("mouseClick", toggleActivateMode)
+	end
+	do
 		local hBlockTakeItemKey = mainBlock:createBlock({})
 		hBlockTakeItemKey.flowDirection = "left_to_right"
 		hBlockTakeItemKey.layoutWidthFraction = 1.0
 		hBlockTakeItemKey.autoHeight = true
 	
-		local labelTakeItemKey = hBlockTakeItemKey:createLabel({ text = "Current Take Single Item Key: " })
+		local labelTakeItemKey = hBlockTakeItemKey:createLabel({ text = "Current Take Single Item Key (or alternate activate key): " })
 		labelTakeItemKey.layoutOriginFractionX = 0.0
 
 		local buttonTakeItemKey = hBlockTakeItemKey:createButton({ id = GUIID_ModConfig_TakeKey, text = config.takeKey })
