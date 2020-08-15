@@ -1,13 +1,34 @@
 # MWSE-QuickLoot
 QuickLoot
 by mort
-Version 1.2
+Version 1.7
 
-Adds a Fallout 4-style to Morrowind. Requires MWSE-lua.
+Adds a Fallout 4-style loot menu to Morrowind. Requires MWSE-lua.
+Mod of the Month January 2019
+
+1.7 update:
+-Press "loot all" on an empty npc or creature to dispose of their corpse
+-Fixed empty window showing up on some plant containers
+
+1.6 update:
+-fixed spacebar resetting index (thanks Unappendixed)
+
+1.5 update:
+-fixed crash on specific trapped containers
+-fixed not being able to type your alternate loot key in the console because it would autoclose the menu
+
+1.4 update:
+-Added an option to use spacebar to take items, and (default) z to open the regular container menu
+-Arrow keys can now be used to scroll through items
+
+1.3 update:
+-full graphic herbalism lua support
+-fixes dead actor tooltips
+-adds support for a "quick enable/disable" key in case you can't decide whether you want to be quickly looting or not
 
 1.2 update:
--allows looting from dead npcs / creatures
--added interop which allows external mwse-lua mods to disable the quickloot menu
+-Allows looting from dead npcs / creatures
+-Added interop which allows external mwse-lua mods to disable the quickloot menu
 
 1.1 update:
 -Fixed bloat issue where containers viewed but not looted acted as though they were altered.
@@ -49,6 +70,7 @@ Coming Soon:
 
 Special Thanks:
 Nullcascade - MWSE-lua for which none of this would be possible, and for some fantastic code contributions
+Sveng - contributed code and many fixes, inspired the quickdisable key
 PeteTheGoat - Extensive testing and all around big supporter also a good guy
 Hrnchamd - MWSE-lua work, MGEXE, MCP, all of that great stuff
 The Morrowind Modding Community Discord for all of its support
