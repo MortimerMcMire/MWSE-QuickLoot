@@ -1,5 +1,7 @@
 QuickLoot
+
 by mort
+
 Version 2
 
 Adds a Fallout 4-style to Morrowind. Requires MWSE-lua.
