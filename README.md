@@ -1,21 +1,28 @@
-# MWSE-QuickLoot
 QuickLoot
 by mort
-Version 1.7
+Version 2
 
-Adds a Fallout 4-style loot menu to Morrowind. Requires MWSE-lua.
-Mod of the Month January 2019
+Adds a Fallout 4-style to Morrowind. Requires MWSE-lua.
+
+2.0 update:
+-fixed quickloot accidentally taking items that can't be carried (invisible lights)
+-blacklist/whitelist functionality
+-new MCM menu
+-additonal minor bug fixes
+
+1.8 update:
+-fixed error from new mwse update
 
 1.7 update:
--Press "loot all" on an empty npc or creature to dispose of their corpse
--Fixed empty window showing up on some plant containers
+-press "loot all" on an empty npc or creature to dispose of the corpse
+-fixed empty window on plant containers
 
 1.6 update:
--fixed spacebar resetting index (thanks Unappendixed)
+-No longer resets index when using spacebar activate
 
 1.5 update:
--fixed crash on specific trapped containers
--fixed not being able to type your alternate loot key in the console because it would autoclose the menu
+-fixed crash on looting specific trapped containers
+-fixed not being able to type your main activate key in console
 
 1.4 update:
 -Added an option to use spacebar to take items, and (default) z to open the regular container menu
@@ -27,8 +34,8 @@ Mod of the Month January 2019
 -adds support for a "quick enable/disable" key in case you can't decide whether you want to be quickly looting or not
 
 1.2 update:
--Allows looting from dead npcs / creatures
--Added interop which allows external mwse-lua mods to disable the quickloot menu
+-allows looting from dead npcs / creatures
+-added interop which allows external mwse-lua mods to disable the quickloot menu
 
 1.1 update:
 -Fixed bloat issue where containers viewed but not looted acted as though they were altered.
@@ -70,7 +77,9 @@ Coming Soon:
 
 Special Thanks:
 Nullcascade - MWSE-lua for which none of this would be possible, and for some fantastic code contributions
-Sveng - contributed code and many fixes, inspired the quickdisable key
 PeteTheGoat - Extensive testing and all around big supporter also a good guy
+Greatness7 - MCM code
+Svengineer - additional code
+doublemoulinet - testing
 Hrnchamd - MWSE-lua work, MGEXE, MCP, all of that great stuff
 The Morrowind Modding Community Discord for all of its support
