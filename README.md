@@ -1,10 +1,11 @@
-QuickLoot
-
-by mort
-
-Version 2
+# QuickLoot
+Version 2.01
 
 Adds a Fallout 4-style to Morrowind. Requires MWSE-lua.
+Mod of the Month January 2019
+
+2.01 update:
+-swapped load event back to initialize
 
 2.0 update:
 -fixed quickloot accidentally taking items that can't be carried (invisible lights)
